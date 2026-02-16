@@ -16,13 +16,16 @@ Whispr/
     ├── Info.plist             # Permissions configuration
     ├── Assets.xcassets/       # App icons
     ├── Managers/              # Core functionality
-    │   ├── AudioCaptureManager.swift
-    │   ├── TranscriptionManager.swift
-    │   ├── TextInjectionManager.swift
-    │   ├── HotkeyManager.swift
-    │   └── ErrorManager.swift
+    │   ├── AudioCaptureManager.swift   # Mic capture + audio level metering
+    │   ├── TranscriptionManager.swift  # whisper.cpp integration
+    │   ├── TextInjectionManager.swift  # Paste into active app
+    │   ├── HotkeyManager.swift         # Global shortcut handling
+    │   ├── PreferencesManager.swift    # Persisted user settings
+    │   └── ErrorManager.swift          # Error handling & recovery
     └── Views/
-        └── PreferencesView.swift
+        ├── PreferencesView.swift       # Settings window
+        ├── RecordingWindow.swift       # Floating recording bar (Dock-aware)
+        └── RecordingBarView.swift      # Animated recording indicator
 ```
 
 ---
@@ -126,20 +129,22 @@ open Whispr.xcodeproj
 - ✅ **System-Wide** - Works in any macOS app
 - ✅ **Menu Bar App** - Non-intrusive, always available
 - ✅ **Global Hotkey** - Cmd+Shift+Space (hold to record)
+- ✅ **Floating Recording Bar** - Animated, Dock-aware indicator above the Dock
+- ✅ **Model Selection** - Choose between Base (fast) and Medium (accurate) models
+- ✅ **Polish Mode** - AI-powered text cleanup for filler words & formatting
+- ✅ **Audio Level Visualization** - Real-time mic level during recording
 - ✅ **60-Second Recordings** - Configurable limit
 - ✅ **Smart Error Handling** - Self-annealing recovery
 
 ---
 
-## ⏭️ Next Steps (Phase 4)
+## ⏭️ Next Steps
 
 Future enhancements:
-- [ ] Llama 3 text cleanup (filler word removal)
-- [ ] Mode toggle (Fast vs Polish)
 - [ ] Custom hotkey recorder
-- [ ] Persistent settings
 - [ ] Usage statistics
 - [ ] Auto-update mechanism
+- [ ] Additional whisper.cpp model sizes (tiny, small, large)
 
 ---
 
@@ -169,7 +174,6 @@ Future enhancements:
 
 ---
 
-**Built with B.L.A.S.T. Protocol** 🚀  
-**Phase 3: Architect - Complete**
+**Built with ❤️ for macOS**
 
 Ready to dictate? Press Cmd+R! 🎤

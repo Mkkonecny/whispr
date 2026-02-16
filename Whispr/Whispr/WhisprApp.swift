@@ -2,6 +2,8 @@
 //  WhisprApp.swift
 //  Whispr
 //
+//  Created by Mkkonecny on 2026-02-14.
+//
 
 import AppKit
 import SwiftUI
@@ -28,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var hotkeyManager: HotkeyManager?
     var errorManager: ErrorManager?
     private var preferencesWindow: NSWindow?
+    private var recordingWindow: RecordingWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Carry out critical non-UI tasks immediately
@@ -83,16 +86,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textInjectionManager = TextInjectionManager(errorManager: errorManager!)
         hotkeyManager = HotkeyManager(errorManager: errorManager!)
 
+        // Pre-initialize floating recording window (fixes first-run appearance issue)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let audioManager = self.audioManager else { return }
+            let barView = RecordingBarView(audioManager: audioManager)
+            self.recordingWindow = RecordingWindow(contentView: AnyView(barView))
+        }
+
         // Wire up the pipeline
         hotkeyManager?.onRecordingStart = { [weak self] in
-            self?.updateMenuBarIcon(state: .recording)
-            self?.audioManager?.startRecording()
+            guard let self = self else { return }
+
+            // Show floating recording bar and hide system menu bar icon
+            DispatchQueue.main.async {
+                self.recordingWindow?.show()
+                self.statusItem?.isVisible = false
+
+                // Extra beat to ensure window is front before starting animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("StartRecordingAnimation"), object: nil)
+                }
+            }
+
+            self.audioManager?.startRecording()
         }
 
         hotkeyManager?.onRecordingStop = { [weak self] in
-            self?.updateMenuBarIcon(state: .processing)
-            self?.audioManager?.stopRecording { audioPath in
-                self?.processRecording(audioPath: audioPath)
+            guard let self = self else { return }
+
+            // 1. Notify the view to shrink back to logo, then to 0 (after 1s persistence)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("StopRecordingAnimation"), object: nil)
+
+            // 2. Wait for full sequence: shrink(0.5s) + logo persistence(1.0s) + fade(0.5s) + buffer
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                self.recordingWindow?.hide()
+                self.statusItem?.isVisible = true
+                self.updateMenuBarIcon(state: .processing)
+            }
+
+            self.audioManager?.stopRecording { audioPath in
+                self.processRecording(audioPath: audioPath)
             }
         }
     }

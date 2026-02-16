@@ -17,7 +17,8 @@ class TranscriptionManager {
     }
 
     private var modelPath: String {
-        return "\(projectRoot)/whisper.cpp/models/ggml-base.bin"
+        let model = PreferencesManager.shared.selectedModel
+        return "\(projectRoot)/whisper.cpp/models/ggml-\(model).bin"
     }
 
     init(errorManager: ErrorManager) {

@@ -65,3 +65,12 @@ fastlane/test_output
 .env
 .tmp/
 *.log
+
+# Local binaries & models (large files, don't commit)
+llama.cpp/bin/
+llama.cpp/models/
+whisper.cpp/models/*.bin
+.DS_Store
+.vscode/
+Whispr/build_output.txt
+BarCode

@@ -18,7 +18,23 @@ struct PreferencesView: View {
                 .font(.title)
 
             GroupBox(label: Text("Transcription Settings")) {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 15) {
+                    Picker("Accuracy / Model", selection: $prefs.selectedModel) {
+                        Text("Base (Fast)").tag("base")
+                        Text("Medium (Accurate)").tag("medium")
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(
+                        prefs.selectedModel == "medium"
+                            ? "🎯 Medium model is slower but much more accurate for languages like Slovak."
+                            : "⚡️ Base model is faster but may struggle with non-English languages."
+                    )
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                    Divider()
+
                     Toggle("Polish Mode (AI Cleanup)", isOn: $prefs.isPolishModeEnabled)
                         .toggleStyle(.switch)
 
