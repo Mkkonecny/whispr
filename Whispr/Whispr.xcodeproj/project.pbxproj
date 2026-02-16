@@ -271,9 +271,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Whispr needs Accessibility permissions to register global keyboard shortcuts and inject transcribed text.";
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Whispr needs Accessibility permissions to register global keyboard shortcuts and inject transcribed text.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Whispr needs access to your microphone to record voice for transcription.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Whispr needs access to your microphone to record voice for transcription.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

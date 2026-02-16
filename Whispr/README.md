@@ -168,9 +168,8 @@ Future enhancements:
 
 ## 📖 Documentation
 
-- **Architecture:** `/Users/mrkkonecny/whispr/architecture/` (5 SOPs)
-- **Progress Log:** `/Users/mrkkonecny/whispr/progress.md`
-- **Task Plan:** `/Users/mrkkonecny/whispr/task_plan.md`
+- **Architecture SOPs:** `architecture/` (audio capture, transcription, text injection, hotkey, error handling)
+- **Whisper.cpp test:** `tools/test_whisper.py`
 
 ---
 

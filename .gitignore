@@ -61,16 +61,17 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
-# B.L.A.S.T. Framework
+# Temporary & build artifacts
 .env
 .tmp/
 *.log
+*.dmg
+
+# OS & editor
+.DS_Store
+.vscode/
 
 # Local binaries & models (large files, don't commit)
 llama.cpp/bin/
 llama.cpp/models/
 whisper.cpp/models/*.bin
-.DS_Store
-.vscode/
-Whispr/build_output.txt
-BarCode
