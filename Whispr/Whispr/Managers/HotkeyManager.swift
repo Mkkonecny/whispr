@@ -9,10 +9,8 @@ import Foundation
 
 class HotkeyManager {
     private let errorManager: ErrorManager
-    var onRecordingStart: (() -> Void)?
-    var onRecordingStop: (() -> Void)?
+    var onToggle: (() -> Void)?
 
-    private var isRecording = false
     private var eventTap: CFMachPort?
 
     init(errorManager: ErrorManager) {
@@ -33,9 +31,9 @@ class HotkeyManager {
         let accessEnabled = AXIsProcessTrustedWithOptions(options)
 
         if accessEnabled {
-            print("✅ Accessibility permission granted")
+            print("[HotkeyManager] INFO: Accessibility permission granted")
         } else {
-            print("⚠️ Accessibility permission required")
+            print("[HotkeyManager] WARN: Accessibility permission required")
             errorManager.handle(error: WhisprError.accessibilityPermissionDenied, level: .modal)
         }
     }
@@ -57,7 +55,7 @@ class HotkeyManager {
                 userInfo: Unmanaged.passUnretained(self).toOpaque()
             )
         else {
-            print("❌ Failed to create event tap")
+            print("[HotkeyManager] ERROR: Failed to create global event tap")
             return
         }
 
@@ -72,6 +70,11 @@ class HotkeyManager {
     {
         guard type == .keyDown else { return Unmanaged.passRetained(event) }
 
+        // Ignore key repeats to prevent rapid toggling
+        if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 {
+            return Unmanaged.passRetained(event)
+        }
+
         let flags = event.flags
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
@@ -80,17 +83,9 @@ class HotkeyManager {
         let isSpace = (keyCode == 49)
 
         if isCmd && isShift && isSpace {
-            isRecording.toggle()
-
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                if self.isRecording {
-                    print("🎤 Starting recording...")
-                    self.onRecordingStart?()
-                } else {
-                    print("🛑 Stopping recording...")
-                    self.onRecordingStop?()
-                }
+                print("[HotkeyManager] INFO: Hotkey triggered (Cmd+Shift+Space)")
+                self?.onToggle?()
             }
             return nil
         }

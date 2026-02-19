@@ -18,11 +18,6 @@ class RecordingWindow: NSPanel {
         )
 
         self.isFloatingPanel = true
-        // Use .floating (level 3) instead of .popUpMenu (level 101).
-        // This keeps the bar below the Dock's window level (20),
-        // so it doesn't interfere with the Dock's hover tracking.
-        // The bar is positioned ABOVE the dock spatially (dockHeight + 20px gap),
-        // so it's still fully visible.
         self.level = .floating
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.backgroundColor = .clear
@@ -31,6 +26,10 @@ class RecordingWindow: NSPanel {
         self.ignoresMouseEvents = true
 
         let hostingView = NSHostingView(rootView: contentView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = .clear
+        hostingView.layer?.shadowOpacity = 0
+        hostingView.layer?.shadowRadius = 0
         self.contentView = hostingView
 
         hasAccessibilityPermission = AXIsProcessTrusted()

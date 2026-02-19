@@ -27,50 +27,117 @@ class TranscriptionManager {
 
     func transcribe(audioPath: String, completion: @escaping (Result<Transcription, Error>) -> Void)
     {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: whisperBinaryPath)
+        ServerManager.shared.ensureServerRunning(type: .whisper) { [weak self] success in
+            guard let self = self, success else {
+                print("[TranscriptionManager] ERROR: Server failed to start or is not running.")
+                completion(.failure(WhisprError.transcriptionFailed))
+                return
+            }
 
-        // We removed -nt (no-timestamps) to ensure the parser finds the text correctly
-        process.arguments = [
-            "-m", modelPath,
-            "-f", audioPath,
-            "-t", "8",
-            "-l", "auto",
-        ]
+            self.sendTranscriptionRequest(audioPath: audioPath, completion: completion)
+        }
+    }
 
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
+    private func sendTranscriptionRequest(
+        audioPath: String, completion: @escaping (Result<Transcription, Error>) -> Void
+    ) {
+        let port = ServerManager.shared.getPort(for: .whisper)
+        let url = URL(string: "http://127.0.0.1:\(port)/inference")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
 
-        // Also capture stderr to help debug errors
-        let errorPipe = Pipe()
-        process.standardError = errorPipe
+        let boundary = UUID().uuidString
+        request.setValue(
+            "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
+        let fileUrl = URL(fileURLWithPath: audioPath)
+
+        // Verify file integrity before sending
         do {
-            try process.run()
-
-            DispatchQueue.global(qos: .userInitiated).async {
-                process.waitUntilExit()
-
-                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                guard let output = String(data: outputData, encoding: .utf8) else {
-                    print("❌ Could not decode output data")
-                    completion(.failure(WhisprError.transcriptionFailed))
-                    return
-                }
-
-                let text = self.parseWhisperOutput(output)
-                if text.isEmpty {
-                    // Log the raw output if parsing failed
-                    print("⚠️ Parser yielded empty text. Raw output length: \(output.count)")
-                    completion(.failure(WhisprError.transcriptionFailed))
-                } else {
-                    completion(
-                        .success(Transcription(text: text, language: "auto", processingTime: 0)))
-                }
+            let attr = try FileManager.default.attributesOfItem(atPath: audioPath)
+            if let size = attr[.size] as? UInt64, size < 100 {
+                print(
+                    "[TranscriptionManager] WARN: Audio file is too small (\(size) bytes). Aborting."
+                )
+                completion(.failure(WhisprError.transcriptionFailed))
+                return
             }
         } catch {
-            completion(.failure(error))
+            print("[TranscriptionManager] ERROR: Failed to check file attributes: \(error)")
+            completion(.failure(WhisprError.transcriptionFailed))
+            return
         }
+
+        guard let fileData = try? Data(contentsOf: fileUrl) else {
+            print("[TranscriptionManager] ERROR: Failed to read audio file at \(audioPath)")
+            completion(.failure(WhisprError.transcriptionFailed))
+            return
+        }
+
+        var body = Data()
+
+        // Add file
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(
+                using: .utf8)!)
+        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n".data(using: .utf8)!)
+
+        // Add response_format=json
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append(
+            "Content-Disposition: form-data; name=\"response_format\"\r\n\r\n".data(using: .utf8)!)
+        body.append("json\r\n".data(using: .utf8)!)
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("[TranscriptionManager] ERROR: Network error: \(error)")
+                completion(.failure(error))
+                return
+            }
+
+            guard let data = data else {
+                print("[TranscriptionManager] ERROR: No response data received.")
+                completion(.failure(WhisprError.transcriptionFailed))
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                print(
+                    "[TranscriptionManager] ERROR: Server returned status \(httpResponse.statusCode)"
+                )
+                if let str = String(data: data, encoding: .utf8) {
+                    print("[TranscriptionManager] DEBUG: Response body: \(str)")
+                }
+            }
+
+            // Parse JSON response
+            // Expected format: { "text": "..." }
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                    let text = json["text"] as? String
+                {
+                    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    completion(
+                        .success(
+                            Transcription(text: cleanText, language: "auto", processingTime: 0)))
+                } else {
+                    print(
+                        "[TranscriptionManager] ERROR: JSON missing 'text' field or invalid structure."
+                    )
+                    completion(.failure(WhisprError.transcriptionFailed))
+                }
+            } catch {
+                print("[TranscriptionManager] ERROR: JSON parsing error: \(error)")
+                completion(.failure(error))
+            }
+        }.resume()
     }
 
     private func parseWhisperOutput(_ output: String) -> String {

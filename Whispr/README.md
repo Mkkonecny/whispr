@@ -44,6 +44,16 @@ Whispr/
 cd /Users/mrkkonecny/whispr/Whispr
 open Whispr.xcodeproj
 ```
+### Option 4: Install Sherpa-Onnx (Parakeet)
+For the fastest possible local transcription:
+1. Open Terminal
+2. Run the setup script:
+   ```bash
+   cd /Users/mrkkonecny/whispr
+   chmod +x setup_sherpa.sh
+   ./setup_sherpa.sh
+   ```
+3. This downloads the high-performance `sherpa-onnx` server and `zipformer` model.
 
 ---
 
@@ -125,16 +135,35 @@ open Whispr.xcodeproj
 
 - ✅ **100% Local Processing** - No cloud, complete privacy
 - ✅ **99 Languages** - Auto-detected
+- ✅ **Server-Client Architecture** - Uses local `whisper.cpp` & `llama.cpp` servers
+- ✅ **Agent Mode** - "Hey Whispr" triggers LLM-powered actions
 - ✅ **Metal Acceleration** - Fast transcription on M-series chips
 - ✅ **System-Wide** - Works in any macOS app
 - ✅ **Menu Bar App** - Non-intrusive, always available
 - ✅ **Global Hotkey** - Cmd+Shift+Space (hold to record)
-- ✅ **Floating Recording Bar** - Animated, Dock-aware indicator above the Dock
-- ✅ **Model Selection** - Choose between Base (fast) and Medium (accurate) models
-- ✅ **Polish Mode** - AI-powered text cleanup for filler words & formatting
-- ✅ **Audio Level Visualization** - Real-time mic level during recording
-- ✅ **60-Second Recordings** - Configurable limit
+- ✅ **Floating Recording Bar** - Animated, Dock-aware indicator
+- ✅ **Model Selection** - Base (fast) vs Medium (accurate)
+- ✅ **Polish Mode** - AI-powered text cleanup (via local Llama)
+- ✅ **Audio Level Visualization** - Real-time mic level
 - ✅ **Smart Error Handling** - Self-annealing recovery
+
+---
+
+## 🏗️ Architecture & Requirements
+
+### Server Integration
+Whispr now uses a **ServerManager** to orchestrate local inference servers:
+- **Transcription**: `whisper-server` (port 8081)
+- **Intelligence**: `llama-server` (port 8082)
+- **Fast Transcription**: `sherpa-onnx` (port 8083, optional)
+
+### System Requirements
+- **macOS:** 14.0+ (Core App), **macOS 26.0+** (Preferences UI)
+- **Hardware:** Apple Silicon (M1/M2/M3) recommended for performance
+- **Dependencies:**
+  - `whisper.cpp` built at `../whisper.cpp`
+  - `llama.cpp` built at `../llama.cpp`
+  - `sherpa-onnx` (optional) at `../sherpa-onnx`
 
 ---
 
@@ -168,8 +197,9 @@ Future enhancements:
 
 ## 📖 Documentation
 
-- **Architecture SOPs:** `architecture/` (audio capture, transcription, text injection, hotkey, error handling)
-- **Whisper.cpp test:** `tools/test_whisper.py`
+- **Architecture:** `/Users/mrkkonecny/whispr/architecture/` (5 SOPs)
+- **Progress Log:** `/Users/mrkkonecny/whispr/progress.md`
+- **Task Plan:** `/Users/mrkkonecny/whispr/task_plan.md`
 
 ---
 

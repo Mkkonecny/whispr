@@ -16,7 +16,7 @@ class ErrorManager {
     }
 
     func handle(error: Error, level: NotificationLevel) {
-        print("📝 Error: \(error.localizedDescription)")
+        print("[ErrorManager] ERROR: \(error.localizedDescription)")
 
         DispatchQueue.main.async {
             switch level {

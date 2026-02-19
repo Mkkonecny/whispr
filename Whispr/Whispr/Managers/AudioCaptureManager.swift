@@ -32,7 +32,7 @@ class AudioCaptureManager: NSObject, ObservableObject {
     }
 
     func startRecording() {
-        print("🎤 Preparing to record...")
+        print("[AudioCaptureManager] INFO: Preparing to start recording session...")
 
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
         if status != .authorized {
@@ -47,7 +47,9 @@ class AudioCaptureManager: NSObject, ObservableObject {
         let inputFormat = inputNode.inputFormat(forBus: 0)
 
         guard inputFormat.sampleRate > 0 else {
-            print("❌ Invalid input sample rate")
+            print(
+                "[AudioCaptureManager] ERROR: Invalid input sample rate detected from audio device."
+            )
             errorManager.handle(error: WhisprError.audioCaptureFailed, level: .banner)
             return
         }
@@ -62,7 +64,8 @@ class AudioCaptureManager: NSObject, ObservableObject {
                 interleaved: false
             )
         else {
-            print("❌ Failed to create target format")
+            print(
+                "[AudioCaptureManager] ERROR: Failed to create target audio format for conversion.")
             return
         }
 
@@ -138,17 +141,25 @@ class AudioCaptureManager: NSObject, ObservableObject {
                 do {
                     try audioFile.write(from: outputBuffer)
                 } catch {
-                    print("❌ Error writing audio buffer: \(error)")
+                    print(
+                        "[AudioCaptureManager] ERROR: Failed to write audio buffer to file: \(error)"
+                    )
                 }
             }
 
             try engine.start()
             recordingStartTime = Date()
-            print("🎤 recording started: \(audioFilePath.lastPathComponent)")
+            print(
+                "[AudioCaptureManager] INFO: Recording started successfully. File: \(audioFilePath.lastPathComponent)"
+            )
         } catch {
-            print("❌ Failed to start recording: \(error)")
+            print("[AudioCaptureManager] ERROR: Failed to start audio engine: \(error)")
             errorManager.handle(error: WhisprError.audioCaptureFailed, level: .banner)
         }
+    }
+
+    var isRecording: Bool {
+        return audioEngine != nil
     }
 
     func stopRecording(completion: @escaping (String?) -> Void) {
@@ -160,12 +171,37 @@ class AudioCaptureManager: NSObject, ObservableObject {
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
 
-        let path = file.url.path
+        // Capture the URL before nil-ing
+        let url = file.url
+        let path = url.path
+
+        // Release references to close the file
         self.audioEngine = nil
         self.audioFile = nil
 
-        print("✅ recording stopped: \(path)")
-        completion(path)
+        // Wait a moment to ensure file handle is released and data is flushed to disk
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            // Verify file exists and has content
+            do {
+                let checkAttr = try FileManager.default.attributesOfItem(atPath: path)
+                if let size = checkAttr[.size] as? UInt64 {
+                    print(
+                        "[AudioCaptureManager] INFO: Recording stopped. File: \(path) (Size: \(size) bytes)"
+                    )
+                    if size < 100 {
+                        print(
+                            "[AudioCaptureManager] WARN: Audio file size is suspiciously small (< 100 bytes)."
+                        )
+                    }
+                }
+            } catch {
+                print(
+                    "[AudioCaptureManager] WARN: Failed to retrieve attributes for audio file: \(error)"
+                )
+            }
+
+            completion(path)
+        }
     }
 
     func cleanup(audioPath: String) {

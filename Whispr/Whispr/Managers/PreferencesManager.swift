@@ -13,6 +13,8 @@ class PreferencesManager: ObservableObject {
     enum Keys {
         static let isPolishModeEnabled = "isPolishModeEnabled"
         static let selectedModel = "selectedModel"
+        static let glassStyle = "glassStyle"
+        static let iconStyle = "iconStyle"
     }
 
     @Published var isPolishModeEnabled: Bool {
@@ -26,9 +28,19 @@ class PreferencesManager: ObservableObject {
             UserDefaults.standard.set(selectedModel, forKey: Keys.selectedModel)
         }
     }
+    
+    @Published var glassStyle: String {
+        didSet { UserDefaults.standard.set(glassStyle, forKey: Keys.glassStyle) }
+    }
+
+    @Published var iconStyle: String {
+        didSet { UserDefaults.standard.set(iconStyle, forKey: Keys.iconStyle) }
+    }
 
     private init() {
         self.isPolishModeEnabled = UserDefaults.standard.bool(forKey: Keys.isPolishModeEnabled)
         self.selectedModel = UserDefaults.standard.string(forKey: Keys.selectedModel) ?? "base"
+        self.glassStyle = UserDefaults.standard.string(forKey: Keys.glassStyle) ?? "clear"
+        self.iconStyle = UserDefaults.standard.string(forKey: Keys.iconStyle) ?? "clear"
     }
 }

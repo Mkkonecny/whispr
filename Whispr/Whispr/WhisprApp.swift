@@ -14,13 +14,20 @@ struct WhisprApp: App {
 
     var body: some Scene {
         Settings {
-            PreferencesView()
+            if #available(macOS 26.0, *) {
+                PreferencesView()
+            } else {
+                Text("Whispr requires macOS 26.0 or later.")
+                    .padding()
+            }
         }
     }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
+    private var isStopping = false
+    private var hideWindowWorkItem: DispatchWorkItem?
 
     // Managers
     var audioManager: AudioCaptureManager?
@@ -77,6 +84,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
+    private var recordingGeneration = 0
+
     private func setupManagers() {
         errorManager = ErrorManager()
 
@@ -94,41 +103,74 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Wire up the pipeline
-        hotkeyManager?.onRecordingStart = { [weak self] in
+        // Wire up the pipeline
+        hotkeyManager?.onToggle = { [weak self] in
             guard let self = self else { return }
 
-            // Show floating recording bar and hide system menu bar icon
-            DispatchQueue.main.async {
-                self.recordingWindow?.show()
-                self.statusItem?.isVisible = false
+            // Prevent accidental restarts while the UI is transitioning out
+            if self.isStopping { return }
 
-                // Extra beat to ensure window is front before starting animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("StartRecordingAnimation"), object: nil)
-                }
+            if self.audioManager?.isRecording == true {
+                self.stopRecording()
+            } else {
+                self.startRecording()
             }
+        }
+    }
 
-            self.audioManager?.startRecording()
+    private func startRecording() {
+        // Cancel any pending hide-window work from a previous stop
+        hideWindowWorkItem?.cancel()
+        hideWindowWorkItem = nil
+
+        // Increment generation to invalidate any remaining pending operations
+        self.recordingGeneration += 1
+
+        // Show floating recording bar and hide system menu bar icon
+        DispatchQueue.main.async {
+            self.recordingWindow?.show()
+            self.statusItem?.isVisible = false
+
+            // Extra beat to ensure window is front before starting animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("StartRecordingAnimation"), object: nil)
+            }
         }
 
-        hotkeyManager?.onRecordingStop = { [weak self] in
-            guard let self = self else { return }
+        self.audioManager?.startRecording()
+        self.updateMenuBarIcon(state: .recording)
+    }
 
-            // 1. Notify the view to shrink back to logo, then to 0 (after 1s persistence)
-            NotificationCenter.default.post(
-                name: NSNotification.Name("StopRecordingAnimation"), object: nil)
+    private func stopRecording() {
+        if isStopping { return }
+        isStopping = true
 
-            // 2. Wait for full sequence: shrink(0.5s) + logo persistence(1.0s) + fade(0.5s) + buffer
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-                self.recordingWindow?.hide()
-                self.statusItem?.isVisible = true
-                self.updateMenuBarIcon(state: .processing)
-            }
+        let currentGen = self.recordingGeneration
 
-            self.audioManager?.stopRecording { audioPath in
-                self.processRecording(audioPath: audioPath)
-            }
+        // 1. Notify the view to shrink back to logo, then fade out
+        NotificationCenter.default.post(
+            name: NSNotification.Name("StopRecordingAnimation"), object: nil)
+
+        // 2. Release the stop guard quickly — just enough to debounce a double-tap.
+        //    The view's own cancellable work items handle the animation correctly.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.isStopping = false
+        }
+
+        // 3. Hide window after full animation: shrink(0.5s) + logo(1.0s) + fade(0.5s) + buffer
+        let hideWork = DispatchWorkItem { [weak self] in
+            guard let self = self, self.recordingGeneration == currentGen else { return }
+            self.recordingWindow?.hide()
+            self.statusItem?.isVisible = true
+            self.updateMenuBarIcon(state: .processing)
+        }
+        hideWindowWorkItem = hideWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2, execute: hideWork)
+
+        // 4. Stop audio and begin processing pipeline
+        self.audioManager?.stopRecording { audioPath in
+            self.processRecording(audioPath: audioPath)
         }
     }
 
@@ -142,12 +184,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let transcription):
-                    // Run AI cleanup (Polish) if enabled
-                    self?.cleanupManager?.cleanup(text: transcription.text) { cleanupResult in
-                        DispatchQueue.main.async {
-                            let finalText = (try? cleanupResult.get()) ?? transcription.text
-                            self?.textInjectionManager?.inject(text: finalText) { success in
-                                self?.updateMenuBarIcon(state: success ? .ready : .error)
+                    let text = transcription.text
+                    let isAgentMode =
+                        text.lowercased().starts(with: "hey whispr")
+                        || text.lowercased().starts(with: "hey whisper")
+
+                    if isAgentMode {
+                        // AGENT MODE: Get context from screen + Process command
+                        self?.updateMenuBarIcon(state: .processing)  // Keep processing state
+
+                        self?.textInjectionManager?.getSelectedText { selectedText in
+                            self?.cleanupManager?.processAgentRequest(
+                                command: text, context: selectedText
+                            ) { result in
+                                DispatchQueue.main.async {
+                                    let finalText = (try? result.get()) ?? text
+                                    // Inject the result (replacing the selected text we just read)
+                                    self?.textInjectionManager?.inject(text: finalText) { success in
+                                        self?.updateMenuBarIcon(state: success ? .ready : .error)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // STANDARD MODE: Cleanup (if enabled) + Inject
+                        self?.cleanupManager?.cleanup(text: text) { cleanupResult in
+                            DispatchQueue.main.async {
+                                let finalText = (try? cleanupResult.get()) ?? text
+                                self?.textInjectionManager?.inject(text: finalText) { success in
+                                    self?.updateMenuBarIcon(state: success ? .ready : .error)
+                                }
                             }
                         }
                     }
@@ -188,12 +254,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showPreferences() {
+        guard #available(macOS 26.0, *) else { return }
         if preferencesWindow == nil {
             let contentView = PreferencesView()
-                .frame(minWidth: 450, minHeight: 450)
+                .frame(minWidth: 520, minHeight: 560)
 
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 450, height: 450),
+                contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered, defer: false)
             window.center()
